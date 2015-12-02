@@ -139,7 +139,11 @@ void dateMenu(Date* date1, Date* date2){
         fflush(stdout);
         date2->day = inputNumber();
         if(isValidDate(*date2)){
-            break;
+            if(dateCmp(date1, date2) > 0){
+                printf("\t\tEnding date should be later than Starting date. Try again.\n");
+            }else{
+                break;
+            }
         }else{
             printf("\t\tThis is not a valid date. Try again.\n");
             fflush(stdout);
@@ -360,11 +364,11 @@ int main(int argc, char **argv)
             lockSem(semid);
             memcpy(shareData, &query, sizeof(Query));
             unlockSem(semid);
-            //            printf("rank:%d, sent SIGUSR2 signal to its child process:%d\n", rank, childPid);
+            printf("rank:%d, sent SIGUSR2 signal to its child process:%d\n", rank, childPid);
             kill(childPid, SIGUSR2);
 
             while(keepWorking){
-                //                printf("rank:%d is running...\n", rank);
+                printf("rank:%d is running...\n", rank);
                 if(rank == 0){
                     mainMenu(&query);
                     if(query.type == USER_EXIT){
@@ -402,9 +406,11 @@ int main(int argc, char **argv)
                         }
                         unlockSem(semid);
                         if(query.type == COMPANY_SALES){
-                            //calc displaement by company_id
+                            sortEventsByCompanyName(localEvents, localEventsCount);
+                            calcDisplacementByCompanyName(localEvents, localEventsCount, displacements, size);
                         }else{
-                            //calc displaement by date
+                            sortEventsByDate(localEvents, localEventsCount);
+                            calcDisplacementByDate(localEvents, localEventsCount, displacements, size, query.date1, query.date2);
                         }
 
                         for(int i = 0; i < size; i++){

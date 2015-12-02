@@ -142,6 +142,43 @@ void sortEventsByDate(Event* pEvents, int size){
     qsort(pEvents, size, sizeof(Event), dateComparator);
 }
 
+void calcDisplacementByDate(Event* events, int eventCount, int* disp, int dispCount, Date date1, Date date2){
+    int days1 = dayFromEpoch(date1);
+    int dateDiff = dayFromEpoch(date2) - days1;
+
+    int tmpDisp[dispCount];
+    for(int i = 0; i < dispCount; i++){
+        tmpDisp[i] = 0;
+    }
+    if(dateDiff == 0 || dispCount == 1){
+        tmpDisp[0] = eventCount;
+    }else{
+        int bigDispSize, smallDispSize;
+        bigDispSize = smallDispSize = dateDiff / dispCount;
+        int rem = dateDiff % dispCount;
+        if(rem > 0){
+            bigDispSize++;
+        }
+
+        for(int i = 0; i < eventCount; i++){
+            int thisDateDiff = dayFromEpoch(events[i].date) - days1;
+            if(thisDateDiff > dateDiff){
+                printf("****************the events are not sorted, wrong\n");
+            }else{
+                if(thisDateDiff < rem * bigDispSize){
+                    tmpDisp[thisDateDiff / bigDispSize]++;
+                }else{
+                    tmpDisp[rem + (thisDateDiff - (rem * bigDispSize)) / smallDispSize]++;
+                }
+            }
+        }
+    }
+
+    disp[0] = 0;
+    for(int i = 1; i < dispCount; i++){
+        disp[i] = disp[i - 1] + tmpDisp[i - 1];
+    }
+}
 void calcDisplacementByCompanyName(Event* events, int eventCount, int* disp, int dispCount){
     int firstLetterCount[26];
     for(int i = 0; i < 26; i++){

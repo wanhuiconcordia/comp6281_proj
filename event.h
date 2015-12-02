@@ -30,6 +30,7 @@ void initEventType(MPI_Datatype *pEvent);
 void printQuery(Query* pQuery, int size);
 void mergeEvents(Event* allEvent, int* pAllEventCount, Event (*bucketEvents)[MAX_EVENT_SIZE], int* bucketEventCount, int bucketCount, int byDateOrCompanyName);
 
+void calcDisplacementByDate(Event* events, int eventCount, int* disp, int dispCount, Date date1, Date date2);
 void calcDisplacementByCompanyName(Event* pEvents, int eventCount, int* pDisplacements, int dispSize);
 
 int companyNameComparator(const void* e1, const void* e2);

@@ -13,7 +13,7 @@ typedef struct{
 }Query;
 
 
-#pragma pack(push, 1)
+//#pragma pack(push, 1)
 typedef struct{
     int sales_id;
     Date date;
@@ -21,7 +21,7 @@ typedef struct{
     char company_name[40];
     float sales_total;
 }Event;
-#pragma pack(pop)
+//#pragma pack(pop)
 
 void readEvent(FILE *pFile, int readEventCount, Event* events, int* pSize);
 void parseEvent(Event* pEvent, char* line);
@@ -32,7 +32,7 @@ void initEventType(MPI_Datatype *pEvent);
 void printQuery(Query* pQuery, int size);
 void mergeEvents(Event* allEvent, int* pAllEventCount, Event** bucketEvents, int* bucketEventCount, int bucketCount, int byDateOrCompanyName);
 
-void calcDisplacementByDate(Event* events, int eventCount, int* disp, int dispCount, Date date1, Date date2);
+void calcDisplacementByDate(Event* events, int eventCount, int* sendCounts, int* disp, int dispCount, Date date1, Date date2);
 void calcDisplacementByCompanyName(Event* pEvents, int eventCount, int* sendCounts, int* pDisplacements, int dispSize);
 
 int companyNameComparator(const void* e1, const void* e2);

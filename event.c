@@ -115,27 +115,7 @@ void sortEventsByCompanyName(Event* pEvents, int size){
 }
 
 int dateComparator(const void* e1, const void* e2){
-    Date* pDate1 = &(((Event*)e1)->date);
-    Date* pDate2 = &(((Event*)e2)->date);
-    if(pDate1->year < pDate2->year){
-        return -1;
-    }else if(pDate1->year == pDate2->year){
-        if(pDate1->month < pDate2->month){
-            return -1;
-        }else if(pDate1->month == pDate2->month){
-            if(pDate1->day < pDate2->day){
-                return -1;
-            }else if(pDate1->day == pDate2->day){
-                return 0;
-            }else{
-                return 1;
-            }
-        }else{
-            return 1;
-        }
-    }else{
-        return 1;
-    }
+    return dateCmp(&(((Event*)e1)->date), &(((Event*)e2)->date));
 }
 
 void sortEventsByDate(Event* pEvents, int size){
@@ -179,7 +159,7 @@ void calcDisplacementByDate(Event* events, int eventCount, int* disp, int dispCo
         disp[i] = disp[i - 1] + tmpDisp[i - 1];
     }
 }
-void calcDisplacementByCompanyName(Event* events, int eventCount, int* disp, int dispCount){
+void calcDisplacementByCompanyName(Event* events, int eventCount, int* sendCounts, int* disp, int dispCount){
     int firstLetterCount[26];
     for(int i = 0; i < 26; i++){
         firstLetterCount[i] = 0;
@@ -192,9 +172,8 @@ void calcDisplacementByCompanyName(Event* events, int eventCount, int* disp, int
 //        printf("%c\t%d\n", 'A' + i, firstLetterCount[i]);
 //    }
 
-    int tmpDisp[dispCount];
     for(int i = 0; i < dispCount; i++){
-        tmpDisp[i] = 0;
+        sendCounts[i] = 0;
     }
 
     int rem = 26 % dispCount;
@@ -217,7 +196,7 @@ void calcDisplacementByCompanyName(Event* events, int eventCount, int* disp, int
             dispIndex++;
         }
 //        printf("%c\tdisp index:%d\n", 'A' + i, dispIndex);
-        tmpDisp[dispIndex] += firstLetterCount[i];
+        sendCounts[dispIndex] += firstLetterCount[i];
     }
 
 //    for(int i = 0; i < dispCount; i++){
@@ -227,13 +206,13 @@ void calcDisplacementByCompanyName(Event* events, int eventCount, int* disp, int
     disp[0] = 0;
 //    printf("%d\tdisp:%d\n", 0, disp[0]);
     for(int i = 1; i < dispCount; i++){
-        disp[i] = disp[i - 1] + tmpDisp[i - 1];
+        disp[i] = disp[i - 1] + sendCounts[i - 1];
 //        printf("%d\tdisp:%d\n",i, disp[i]);
     }
 }
 
 
-void mergeEvents(Event* allEvent, int* pAllEventCount, Event (*bucketEvents)[MAX_EVENT_SIZE], int* bucketEventCount, int bucketCount, int byDateOrCompanyName){
+void mergeEvents(Event* allEvent, int* pAllEventCount, Event** bucketEvents, int* bucketEventCount, int bucketCount, int byDateOrCompanyName){
     int allEventCount = 0;
     int bucketEventCursor[bucketCount];
     for(int i = 0; i < bucketCount; i++){

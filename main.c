@@ -152,8 +152,9 @@ void dateMenu(Date* date1, Date* date2){
 }
 
 void mainMenu(Query* pQuery){
+    memset(pQuery, 0, sizeof(Query));
     while(TRUE){
-        //clear();
+//        clear();
         printf("\n+++++++++++++++++++++++\n");
         printf("\t1. Company Sales\n");
         printf("\t2. Sales by Date\n");
@@ -225,12 +226,12 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    printf("semid:%d, shmid:%d\n", semid, shmid);
+    //printf("semid:%d, shmid:%d\n", semid, shmid);
+    setRandSeed();
 
     int pid = fork();
 
     if(pid == 0){   //child process
-        setRandSeed();
         int read_max = 1000;
         if(argc > 0){
             int tmpNum = atoi(argv[1]);
@@ -239,15 +240,18 @@ int main(int argc, char **argv)
             }
         }
 
-        int eventCountPerTimer = rand() % (read_max - 10) + 10;
+//        int eventCountPerTimer = rand() % (read_max - 10) + 10;
+        int eventCountPerTimer = 10;
         int parentPid = getppid();
-        printf("parent pid: %d, child pid:%d\n", parentPid, getpid());
+        //printf("parent pid: %d, child pid:%d\n", parentPid, getpid());
         void *shareData = shmat(shmid, NULL, 0);
         signal(SIGUSR1, childSignalHandler);
         signal(SIGUSR2, childSignalHandler);
         signal(SIGALRM, childSignalHandler);
-        Event rawEvents[MAX_EVENT_SIZE];
+        Event* rawEvents = malloc(MAX_EVENT_SIZE * sizeof(Event));
         int rawEventCount = 0;
+        Event* queriedEvents = malloc(MAX_EVENT_SIZE * sizeof(Event));
+        int queriedEventCount = 0;
 //        int cookedEventCountToParent = 0;
         Query query;
         char fileName[10];
@@ -271,21 +275,33 @@ int main(int argc, char **argv)
                 }else if(query.type == COMPANY_SALES){
                     sortEventsByCompanyName(rawEvents, rawEventCount);
                     lockSem(semid);
-                    memcpy(shareData, rawEvents, rawEventCount * sizeof(Event));
+                    memcpy(shareData, &rawEventCount, sizeof(int));
+                    memcpy(shareData + sizeof(int), rawEvents, rawEventCount * sizeof(Event));
+                    //                    printEvent(shareData + sizeof(int), rawEventCount);
                     unlockSem(semid);
                     kill(parentPid, SIGUSR2);
                 }else if(query.type == SALES_BY_DATE){
-                    Event queriedEvents[MAX_EVENT_SIZE];
-                    int queriedEventCount = 0;
+                    queriedEventCount = 0;
+
+                    int minDays = dayFromEpoch(query.date1);
+                    int maxDays = dayFromEpoch(query.date2);
+                    int thisDays;
                     for(int i = 0; i < rawEventCount; i++){
-                        if(dateCmp(&(rawEvents[i].date), &(query.date1)) <= 0
-                                && dateComparator(&(rawEvents[i].date), &(query.date2)) >= 0){
+                        thisDays = dayFromEpoch(rawEvents[i].date);
+                        if(thisDays >= minDays && thisDays <= maxDays){
                             queriedEvents[queriedEventCount++] = rawEvents[i];
                         }
                     }
+                    //                    usleep(rand() % 5 + 1);
+                    //                    printf("**********Before date sorting:\n");
+                    //                    printEvent(queriedEvents, queriedEventCount);
+                    //                    printf("**********After date sorting:\n");
                     sortEventsByDate(queriedEvents, queriedEventCount);
+
+                    //                    printEvent(queriedEvents, queriedEventCount);
                     lockSem(semid);
-                    memcpy(shareData, queriedEvents, queriedEventCount * sizeof(Event));
+                    memcpy(shareData, &queriedEventCount, sizeof(int));
+                    memcpy(shareData + sizeof(int), queriedEvents, queriedEventCount * sizeof(Event));
                     unlockSem(semid);
                     kill(parentPid, SIGUSR2);
                 }else{//DELETE_BY_DATE
@@ -310,19 +326,22 @@ int main(int argc, char **argv)
 
             if(isPendingReadRequired){
                 readEvent(file, eventCountPerTimer, rawEvents, &rawEventCount);
+                //                printEvent(rawEvents, rawEventCount);
                 isPendingReadRequired = FALSE;
             }
             usleep(SLEEP_INTERVAL);
         }
 
-        printf("child process finished\n");
+        //printf("child process finished\n");
+        free(queriedEvents);
+        free(rawEvents);
 
         kill(parentPid, SIGUSR1);	//tell parent process that I am ready to terminate and will not touch the shared resource
         shmdt(shareData);
     }else if(pid > 0){      //parent process
         int size, rank;
         int childPid = pid;
-        printf("parent pid: %d, child pid:%d\n", getpid(), childPid);
+        //printf("parent pid: %d, child pid:%d\n", getpid(), childPid);
         void *shareData = shmat(shmid, NULL, 0);
         isChildProcessRunning = TRUE;
         MPI_Init(&argc, &argv);
@@ -339,22 +358,25 @@ int main(int argc, char **argv)
             MPI_Datatype QueryType;
             initQueryType(&QueryType);
 
-            Event localEvents[MAX_EVENT_SIZE];                  //Save events from child process
+            Event* localEvents = malloc(MAX_EVENT_SIZE * sizeof(Event));                  //Save events from child process
             int localEventsCount = 0;
 
-            Event finalEvents[MAX_EVENT_SIZE * size];           //Save the final events(rank 0 use it)
+            Event* finalEvents = malloc(MAX_EVENT_SIZE * size * sizeof(Event));           //Save the final events(rank 0 use it)
             int finalEventCount = 0;
 
-            Event bucketEvents[size][MAX_EVENT_SIZE];           //Save events from peer MPI nodes
+            Event* bucketEvents[size];           //Save events from peer MPI nodes
+            for(int i = 0; i < size; i++){
+                bucketEvents[i] = malloc(MAX_EVENT_SIZE * sizeof(Event));
+            }
             int bucketEventCount[size];
 
-            Event mergedBucketEvents[MAX_EVENT_SIZE * size];    //Save the merged bucket events
+            Event* mergedBucketEvents = malloc(MAX_EVENT_SIZE * size * sizeof(Event));    //Save the merged bucket events
             int mergedBucketEventCount = 0;
 
             int localDelCount = 0;
             int finalDelCount[size];
 
-            int sendcounts[size];
+            int sendCounts[size];
             int displacements[size];
 
 
@@ -364,11 +386,11 @@ int main(int argc, char **argv)
             lockSem(semid);
             memcpy(shareData, &query, sizeof(Query));
             unlockSem(semid);
-            printf("rank:%d, sent SIGUSR2 signal to its child process:%d\n", rank, childPid);
+            //printf("rank:%d, sent SIGUSR2 signal to its child process:%d\n", rank, childPid);
             kill(childPid, SIGUSR2);
 
             while(keepWorking){
-                printf("rank:%d is running...\n", rank);
+                //printf("rank:%d is running...\n", rank);
                 if(rank == 0){
                     mainMenu(&query);
                     if(query.type == USER_EXIT){
@@ -377,8 +399,8 @@ int main(int argc, char **argv)
                 }
                 //bcast the query
                 MPI_Bcast(&query, 1, QueryType, 0, MPI_COMM_WORLD);
-                //                printf("rank:%d\t", rank);
-                //                printQuery(&query, 1);
+//                printf("rank:%d\t", rank);
+//                printQuery(&query, 1);
                 if(query.type == USER_EXIT){
                     keepWorking = FALSE;
                 }else{
@@ -401,49 +423,70 @@ int main(int argc, char **argv)
                     }else{
                         lockSem(semid);
                         localEventsCount = *((int *)shareData);
+                        printf("rank:%d get %d events from child process\n", rank, localEventsCount);
                         if(localEventsCount > 0){
-                            memcpy(localEvents, shareData + sizeof(int), localEventsCount);
+                            memcpy(localEvents, shareData + sizeof(int), localEventsCount * sizeof(Event));
+                            printf("rank:%d, events are:\n", rank);
+                            //                            printEvent(shareData + sizeof(int), localEventsCount);
                         }
                         unlockSem(semid);
                         if(query.type == COMPANY_SALES){
-                            sortEventsByCompanyName(localEvents, localEventsCount);
-                            calcDisplacementByCompanyName(localEvents, localEventsCount, displacements, size);
+                            //sortEventsByCompanyName(localEvents, localEventsCount);
+
+                            calcDisplacementByCompanyName(localEvents, localEventsCount, sendCounts, displacements, size);
+
                         }else{
-                            sortEventsByDate(localEvents, localEventsCount);
+                            //sortEventsByDate(localEvents, localEventsCount);
                             calcDisplacementByDate(localEvents, localEventsCount, displacements, size, query.date1, query.date2);
                         }
-
                         for(int i = 0; i < size; i++){
-                            MPI_Scatterv(localEvents, sendcounts, displacements, EventType, bucketEvents[i], MAX_EVENT_SIZE, EventType, i, MPI_COMM_WORLD);
+                            printf("rank:%d\tdisp[%d]:%d\tsendCounts[%d]:%d\n", rank, i, displacements[i], i, sendCounts[i]);
                         }
 
+                        //                        for(int i = 0; i < size; i++){
+                        //                            sendCounts[i] = 1;
+                        //                        }
                         for(int i = 0; i < size; i++){
-                            MPI_Gather(&localEventsCount, 1, MPI_INT, bucketEventCount, 1, MPI_INT, i, MPI_COMM_WORLD);
+                            MPI_Scatterv(localEvents, sendCounts, displacements, EventType, bucketEvents[i], MAX_EVENT_SIZE, EventType, i, MPI_COMM_WORLD);
                         }
 
-                        if(size == 1){
-                            memcpy(mergedBucketEvents, bucketEvents, mergedBucketEventCount * sizeof(Event));
-                        }else{
-                            if(query.type == COMPANY_SALES){
-                                mergeEvents(mergedBucketEvents, &mergedBucketEventCount, bucketEvents, bucketEventCount, size, 1/*by company_name*/);
-                            }else {
-                                mergeEvents(mergedBucketEvents, &mergedBucketEventCount, bucketEvents, bucketEventCount, size, 0/*by date*/);
-                            }
+
+                        printf("rank %d After scatter events\n", rank);
+                        for(int i = 0; i < size; i++){
+                            MPI_Gather(&sendCounts[i], 1, MPI_INT, bucketEventCount, 1, MPI_INT, i, MPI_COMM_WORLD);
                         }
 
-                        if(rank == 0){
-                            finalEventCount = mergedBucketEventCount;
-                            memcpy(finalEvents, mergedBucketEvents, mergedBucketEventCount * sizeof(Event));
-                            int receivedEventCount = 0;
-                            MPI_Status status;
-                            for(int i = 1; i < size; i++){
-                                MPI_Recv (finalEvents + finalEventCount, MAX_EVENT_SIZE * size, EventType, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &status);
-                                MPI_Get_count (&status, EventType, &receivedEventCount);
-                                finalEventCount += receivedEventCount;
-                            }
-                        }else{
-                            MPI_Send (mergedBucketEvents, mergedBucketEventCount, EventType, 0, 1, MPI_COMM_WORLD);
+                        sleep(rank + 1);
+                        printf("rank:%d bucketEvents\n", rank);
+                        for(int i = 0; i < size; i++){
+                            printf("bucketEventCount[%d]:%d\n", i, bucketEventCount[i]);
+                            printEvent(bucketEvents[i], bucketEventCount[i]);
+                            usleep(500);
                         }
+
+                        //                        if(size == 1){
+                        //                            memcpy(mergedBucketEvents, bucketEvents[0], mergedBucketEventCount * sizeof(Event));
+                        //                        }else{
+                        //                            if(query.type == COMPANY_SALES){
+                        //                                mergeEvents(mergedBucketEvents, &mergedBucketEventCount, bucketEvents, bucketEventCount, size, 1/*by company_name*/);
+                        //                            }else {
+                        //                                mergeEvents(mergedBucketEvents, &mergedBucketEventCount, bucketEvents, bucketEventCount, size, 0/*by date*/);
+                        //                            }
+                        //                        }
+
+                        //                        if(rank == 0){
+                        //                            finalEventCount = mergedBucketEventCount;
+                        //                            memcpy(finalEvents, mergedBucketEvents, mergedBucketEventCount * sizeof(Event));
+                        //                            int receivedEventCount = 0;
+                        //                            MPI_Status status;
+                        //                            for(int i = 1; i < size; i++){
+                        //                                MPI_Recv (finalEvents + finalEventCount, MAX_EVENT_SIZE * size, EventType, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &status);
+                        //                                MPI_Get_count (&status, EventType, &receivedEventCount);
+                        //                                finalEventCount += receivedEventCount;
+                        //                            }
+                        //                        }else{
+                        //                            MPI_Send (mergedBucketEvents, mergedBucketEventCount, EventType, 0, 1, MPI_COMM_WORLD);
+                        //                        }
                     }
                 }
             }
@@ -452,6 +495,13 @@ int main(int argc, char **argv)
             while(isChildProcessRunning){
                 usleep(SLEEP_INTERVAL); //waiting for child process to finish its job
             }
+            free(localEvents);
+            free(finalEvents);
+            free(mergedBucketEvents);
+            for(int i = 0; i < size; i++){
+                free(bucketEvents[i]);
+            }
+
             MPI_Type_free(&EventType);
             MPI_Type_free(&QueryType);
         }else{
@@ -463,9 +513,9 @@ int main(int argc, char **argv)
 
         semctl(semid, 0, IPC_RMID, dummy);
         shmdt(shareData);
-        shmctl(shmid, IPC_RMID, shareData);
+        shmctl(shmid, IPC_RMID, NULL);
         MPI_Finalize();
-        printf("Parent process finished\n");
+        //printf("Parent process finished\n");
     }else{  //error fork
         printf("Failed to fork()\n");
         semctl(semid, 0, IPC_RMID, dummy);

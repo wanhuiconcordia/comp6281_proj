@@ -4,7 +4,7 @@
 #define TRUE 1
 #define FALSE 0
 
-#define MAX_EVENT_SIZE 5000
+#define MAX_EVENT_SIZE 500000
 
 void setRandSeed();
 

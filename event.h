@@ -1,9 +1,9 @@
 #ifndef EVENT_H
 #define EVENT_H
-#include <date.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include "date.h"
 #include "tools.h"
 
 #define UNKNOWN_QUERY 0

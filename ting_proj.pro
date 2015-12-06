@@ -13,13 +13,14 @@ QMAKE_LFLAGS += $$system(mpicxx --showme:link)
 QMAKE_CXXFLAGS += $$system(mpicxx --showme:compile) -DMPICH_IGNORE_CXX_SEEK
 QMAKE_CXXFLAGS_RELEASE += $$system(mpicxx --showme:compile) -DMPICH_IGNORE_CXX_SEEK
 
-SOURCES += main.c \
+SOURCES += \
     date.c \
     event.c \
     tools.c \
     menu.c \
     odd.c \
-    even.c
+    even.c \
+    db.c
 
 HEADERS += \
     date.h \

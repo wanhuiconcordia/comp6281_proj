@@ -51,3 +51,24 @@ int isValidFloat(char* str){
     }
     return 1;
 }
+
+
+int unlockSem(int semid){
+    struct sembuf sop;
+    sop.sem_num = 0;
+    sop.sem_op = 1;
+    /* Add, subtract, or wait for 0 */
+    sop.sem_flg = 0;
+    int iRet = semop(semid, &sop, 1);
+    return iRet;
+}
+
+int lockSem(int semid){
+    struct sembuf sop;
+    sop.sem_num = 0;
+    sop.sem_op = -1;
+    /* Add, subtract, or wait for 0 */
+    sop.sem_flg = 0;
+    int iRet = semop(semid, &sop, 1);
+    return iRet;
+}

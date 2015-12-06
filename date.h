@@ -10,7 +10,6 @@ typedef struct{
 }Date;
 
 void printDate(Date d);
-
 int isLeapyear(unsigned short year);
 Date generateDate(Date begin, Date end);
 int dateCmp(Date* date1, Date* date2);

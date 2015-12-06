@@ -5,6 +5,14 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include "tools.h"
+
+#define UNKNOWN_QUERY 0
+#define COMPANY_SALES 1
+#define SALES_BY_DATE 2
+#define DELETE_BY_DATE 3
+#define USER_EXIT 4
+#define PARENT_PROCESS_READY 5
+
 typedef struct{
     int type;
     Date date1;

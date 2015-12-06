@@ -16,12 +16,18 @@ QMAKE_CXXFLAGS_RELEASE += $$system(mpicxx --showme:compile) -DMPICH_IGNORE_CXX_S
 SOURCES += main.c \
     date.c \
     event.c \
-    tools.c
+    tools.c \
+    menu.c \
+    odd.c \
+    even.c
 
 HEADERS += \
     date.h \
     event.h \
     segun.h \
-    tools.h
+    tools.h \
+    menu.h \
+    odd.h \
+    even.h
 
 LIBS += -lpthread -lrt
